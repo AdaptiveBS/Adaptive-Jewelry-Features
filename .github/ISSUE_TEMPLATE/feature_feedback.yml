@@ -1,0 +1,95 @@
+name: 📝 Feedback on Existing Feature
+description: Provide feedback on a feature that's already in development or released
+title: "[FEEDBACK] "
+labels: ["feedback"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Share your experience and feedback on existing adaptive jewelry features. Your input helps us improve!
+
+  - type: input
+    id: feature-name
+    attributes:
+      label: Feature Name
+      description: What feature are you providing feedback on?
+      placeholder: "e.g., Magnetic Clasp System, Easy-Grip Earring Backs, etc."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: feedback-type
+    attributes:
+      label: Feedback Type
+      description: What type of feedback are you providing?
+      options:
+        - Positive Experience
+        - Suggested Improvement
+        - Issue or Problem
+        - Accessibility Concern
+        - Usability Feedback
+        - General Comments
+    validations:
+      required: true
+
+  - type: textarea
+    id: experience
+    attributes:
+      label: Your Experience
+      description: Describe your experience with this feature
+      placeholder: "When using this feature, I found that..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-works
+    attributes:
+      label: What Works Well
+      description: What aspects of this feature work well for you?
+      placeholder: "The things I like about this feature are..."
+
+  - type: textarea
+    id: what-could-improve
+    attributes:
+      label: What Could Be Improved
+      description: What aspects could be better or different?
+      placeholder: "This feature could be improved by..."
+
+  - type: dropdown
+    id: disability-type
+    attributes:
+      label: Disability/Accessibility Context (Optional)
+      description: If comfortable sharing, what type of accessibility need does this relate to?
+      options:
+        - Prefer not to say
+        - Limited hand/finger mobility
+        - Limited arm/shoulder mobility
+        - Visual impairment
+        - Tremor or movement disorder
+        - Arthritis or joint issues
+        - Chronic pain
+        - Cognitive considerations
+        - Multiple accessibility needs
+        - Other
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggestions
+    attributes:
+      label: Specific Suggestions
+      description: Do you have specific suggestions for improvement?
+      placeholder: "My suggestions would be..."
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Community Guidelines
+      description: By providing this feedback, you agree to follow our community guidelines
+      options:
+        - label: I have read the Contributing Guidelines
+          required: true
+        - label: This feedback is constructive and respectful
+          required: true
