@@ -1,0 +1,274 @@
+name: Project v2 → Create Discussions & Advance Status
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write           # commit snapshot if you keep one
+  issues: write             # in case items are Issues/PRs and you want to comment
+  pull-requests: write
+  discussions: write        # create discussions
+  actions: read
+  # If your org requires it for Projects v2 GraphQL:
+  # projects: write
+
+env:
+  GH_TOKEN: ${{ github.token }}           # or swap to PAT: ${{ secrets.ORG_PAT }}
+  ORG_LOGIN: AdaptiveBS                   # your org
+  PROJECT_NUMBER: "71"                    # convenient for the bootstrap call
+  PROJECT_ID: ""                          # leave empty to auto-resolve from number
+  STATUS_FIELD_NAME: "Status"
+  STATUS_PICKUP_VALUE: "Add to Discussion"      # items in this status will be processed
+  STATUS_NEXT_VALUE: "Added to discussion"      # set this exact single-select option after creating discussion
+  REPO: "AdaptiveBS/Adaptive-Jewelry-Features"     # <-- set the repo that will host discussions
+  DISCUSSION_CATEGORY_NAME: "General"     # must exist in the target repo
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Resolve Project/Field/Option IDs
+        id: ids
+        run: |
+          set -e
+          # Resolve project ID if not provided
+          if [ -z "${PROJECT_ID}" ] || [ "${PROJECT_ID}" = "" ]; then
+            RESP=$(gh api graphql -f query='
+              query($org:String!, $number:Int!){
+                organization(login:$org){
+                  projectV2(number:$number){
+                    id
+                    fields(first:100){
+                      nodes{
+                        __typename
+                        ... on ProjectV2Field{ id name }
+                        ... on ProjectV2SingleSelectField{
+                          id name options{ id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }' -F org="${ORG_LOGIN}" -F number="${PROJECT_NUMBER}")
+            PROJECT_ID=$(echo "$RESP" | jq -r '.data.organization.projectV2.id')
+            FIELDS=$(echo "$RESP" | jq '.data.organization.projectV2.fields.nodes')
+          else
+            # If PROJECT_ID is provided, we still need fields
+            RESP=$(gh api graphql -f query='
+              query($id:ID!){
+                node(id:$id){
+                  ... on ProjectV2{
+                    fields(first:100){
+                      nodes{
+                        __typename
+                        ... on ProjectV2Field{ id name }
+                        ... on ProjectV2SingleSelectField{
+                          id name options{ id name }
+                        }
+                      }
+                    }
+                  }
+                }
+              }' -F id="${PROJECT_ID}")
+            FIELDS=$(echo "$RESP" | jq '.data.node.fields.nodes')
+          fi
+
+          STATUS_FIELD_ID=$(echo "$FIELDS" | jq -r --arg n "${STATUS_FIELD_NAME}" '
+            .[] | select(.name==$n) | .id
+          ')
+          if [ "$STATUS_FIELD_ID" = "null" ] || [ -z "$STATUS_FIELD_ID" ]; then
+            echo "Status field '${STATUS_FIELD_NAME}' not found" >&2
+            exit 1
+          fi
+
+          PICKUP_OPTION_ID=$(echo "$FIELDS" | jq -r --arg n "${STATUS_FIELD_NAME}" --arg v "${STATUS_PICKUP_VALUE}" '
+            .[] | select(.name==$n and .options)
+            | .options[] | select(.name==$v) | .id
+          ')
+          NEXT_OPTION_ID=$(echo "$FIELDS" | jq -r --arg n "${STATUS_FIELD_NAME}" --arg v "${STATUS_NEXT_VALUE}" '
+            .[] | select(.name==$n and .options)
+            | .options[] | select(.name==$v) | .id
+          ')
+          if [ -z "$PICKUP_OPTION_ID" ] || [ "$PICKUP_OPTION_ID" = "null" ]; then
+            echo "Pickup option '${STATUS_PICKUP_VALUE}' not found in field '${STATUS_FIELD_NAME}'" >&2
+            exit 1
+          fi
+          if [ -z "$NEXT_OPTION_ID" ] || [ "$NEXT_OPTION_ID" = "null" ]; then
+            echo "Next option '${STATUS_NEXT_VALUE}' not found in field '${STATUS_FIELD_NAME}'" >&2
+            exit 1
+          fi
+
+          # Resolve repository & discussion category
+          OWNER=$(echo "${REPO}" | cut -d'/' -f1)
+          NAME=$(echo "${REPO}" | cut -d'/' -f2)
+          REPO_RESP=$(gh api graphql -f query='
+            query($owner:String!, $name:String!){
+              repository(owner:$owner, name:$name){
+                id
+                discussionCategories(first:100){ nodes{ id name } }
+              }
+            }' -F owner="$OWNER" -F name="$NAME")
+          REPO_ID=$(echo "$REPO_RESP" | jq -r '.data.repository.id')
+          CAT_ID=$(echo "$REPO_RESP" | jq -r --arg c "${DISCUSSION_CATEGORY_NAME}" '
+            .data.repository.discussionCategories.nodes[]
+            | select(.name==$c) | .id
+          ')
+          if [ -z "$CAT_ID" ] || [ "$CAT_ID" = "null" ]; then
+            echo "Discussion category '${DISCUSSION_CATEGORY_NAME}' not found in ${REPO}" >&2
+            exit 1
+          fi
+
+          {
+            echo "project_id=$PROJECT_ID"
+            echo "status_field_id=$STATUS_FIELD_ID"
+            echo "pickup_option_id=$PICKUP_OPTION_ID"
+            echo "next_option_id=$NEXT_OPTION_ID"
+            echo "repo_id=$REPO_ID"
+            echo "category_id=$CAT_ID"
+          } >> $GITHUB_OUTPUT
+
+      - name: Fetch items currently in pickup status
+        id: fetch
+        run: |
+          set -e
+          PROJECT_ID='${{ steps.ids.outputs.project_id }}'
+          STATUS_FIELD_ID='${{ steps.ids.outputs.status_field_id }}'
+          PICKUP_OPTION_ID='${{ steps.ids.outputs.pickup_option_id }}'
+
+          Q='
+          query($project:ID!, $after:String){
+            node(id:$project){
+              ... on ProjectV2{
+                items(first:100, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}){
+                  pageInfo{ hasNextPage endCursor }
+                  nodes{
+                    id
+                    content{
+                      __typename
+                      ... on Issue{ id number url title repository{ nameWithOwner } }
+                      ... on PullRequest{ id number url title repository{ nameWithOwner } }
+                    }
+                    fieldValues(first:50){
+                      nodes{
+                        __typename
+                        ... on ProjectV2ItemFieldSingleSelectValue{
+                          name
+                          optionId
+                          field{ __typename ... on ProjectV2SingleSelectField { id name } }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }'
+
+          OUT='[]'
+          AFTER=null
+          for i in {1..5}; do
+            R=$(gh api graphql -f query="$Q" -F project="$PROJECT_ID" -F after="$AFTER")
+            PAGE=$(echo "$R" | jq '.data.node.items.nodes')
+            OUT=$(jq -c --argjson a "$OUT" --argjson b "$PAGE" '$a + $b' <<< '{}')
+            NEXT=$(echo "$R" | jq '.data.node.items.pageInfo.hasNextPage')
+            if [ "$NEXT" = "true" ]; then
+              AFTER=$(echo "$R" | jq -r '.data.node.items.pageInfo.endCursor' | sed 's/"/\\"/g')
+            else
+              break
+            fi
+          done
+
+          # Keep only items whose Status optionId == PICKUP_OPTION_ID
+          TO_PROCESS=$(echo "$OUT" | jq -c --arg sid "$STATUS_FIELD_ID" --arg opt "$PICKUP_OPTION_ID" '
+            [ .[] | select(
+                (.fieldValues.nodes // [])
+                | map(select(.field.id==$sid and .optionId==$opt)) | length > 0
+              )
+            ]
+          ')
+          echo "items=$TO_PROCESS" >> $GITHUB_OUTPUT
+          echo "Found $(echo "$TO_PROCESS" | jq 'length') item(s) in status '${{ env.STATUS_PICKUP_VALUE }}'."
+
+      - name: Create discussions and advance status
+        if: ${{ fromJson(steps.fetch.outputs.items) != [] }}
+        run: |
+          set -e
+          ITEMS='${{ steps.fetch.outputs.items }}'
+          REPO_ID='${{ steps.ids.outputs.repo_id }}'
+          CAT_ID='${{ steps.ids.outputs.category_id }}'
+          PROJECT_ID='${{ steps.ids.outputs.project_id }}'
+          STATUS_FIELD_ID='${{ steps.ids.outputs.status_field_id }}'
+          NEXT_OPTION_ID='${{ steps.ids.outputs.next_option_id }}'
+
+          create_discussion_mut='
+            mutation($repo:ID!, $cat:ID!, $title:String!, $body:String!){
+              createDiscussion(input:{
+                repositoryId:$repo,
+                categoryId:$cat,
+                title:$title,
+                body:$body
+              }){
+                discussion{ id url }
+              }
+            }'
+
+          update_field_mut='
+            mutation($project:ID!, $item:ID!, $field:ID!, $option: String!){
+              updateProjectV2ItemFieldValue(input:{
+                projectId:$project,
+                itemId:$item,
+                fieldId:$field,
+                value:{ singleSelectOptionId:$option }
+              }){ clientMutationId }
+            }'
+
+          echo "$ITEMS" | jq -c '.[]' | while read -r item; do
+            ITEM_ID=$(echo "$item" | jq -r '.id')
+            TYPE=$(echo "$item" | jq -r '.content.__typename // "ProjectV2Item"')
+            TITLE=$(echo "$item" | jq -r '.content.title // "Project Item"')
+            URL=$(echo "$item" | jq -r '.content.url // ""')
+            REPO_NAME=$(echo "$item" | jq -r '.content.repository.nameWithOwner // ""')
+
+            DISC_TITLE="$TITLE"
+            DISC_BODY="Created automatically from Project item.\n\n**Source**: ${URL}\n**Repo**: ${REPO_NAME}"
+
+            # 1) Create discussion
+            DRESP=$(gh api graphql -f query="$create_discussion_mut" -F repo="$REPO_ID" -F cat="$CAT_ID" \
+                   -F title="$DISC_TITLE" -F body="$DISC_BODY")
+            DISC_URL=$(echo "$DRESP" | jq -r '.data.createDiscussion.discussion.url')
+            echo "Created discussion: $DISC_URL"
+
+            # 2) (Optional) add a back-link comment on the Issue/PR
+            if [[ "$URL" =~ /issues/[0-9]+$ ]]; then
+              R=$(echo "$URL" | sed -E 's#https://github.com/([^/]+/[^/]+)/issues/[0-9]+#\1#')
+              N=$(echo "$URL" | sed -E 's#.*/issues/([0-9]+)$#\1#')
+              gh api repos/$R/issues/$N/comments -f body="Discussion created: $DISC_URL"
+            elif [[ "$URL" =~ /pull/[0-9]+$ ]]; then
+              R=$(echo "$URL" | sed -E 's#https://github.com/([^/]+/[^/]+)/pull/[0-9]+#\1#')
+              N=$(echo "$URL" | sed -E 's#.*/pull/([0-9]+)$#\1#')
+              gh api repos/$R/issues/$N/comments -f body="Discussion created: $DISC_URL"
+            fi
+
+            # 3) Advance status → NEXT_OPTION_ID
+            gh api graphql -f query="$update_field_mut" \
+              -F project="$PROJECT_ID" -F item="$ITEM_ID" -F field="$STATUS_FIELD_ID" -F option="$NEXT_OPTION_ID"
+            echo "Item $ITEM_ID → Status '${{ env.STATUS_NEXT_VALUE }}'"
+          done
+
+      # (Optional) keep a local snapshot if you also want diffing/audit
+      # - name: Save snapshot
+      #   run: |
+      #     echo '${{ steps.fetch.outputs.items }}' | jq . > .github/last-processed-items.json
+      #     if [ -n "$(git status --porcelain .github/last-processed-items.json)" ]; then
+      #       git config user.name "github-actions[bot]"
+      #       git config user.email "github-actions[bot]@users.noreply.github.com"
+      #       git add .github/last-processed-items.json
+      #       git commit -m "Update last-processed items"
+      #       git push
