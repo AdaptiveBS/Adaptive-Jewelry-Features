@@ -1,0 +1,94 @@
+name: 🚀 Feature Request
+description: Suggest an adaptive jewelry feature or improvement
+title: "[FEATURE] "
+labels: ["enhancement", "feature-request"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting a new adaptive jewelry feature! Your input helps us create more accessible and user-friendly jewelry.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: Clearly describe the adaptive feature you'd like to see
+      placeholder: "I would like to see..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: accessibility-need
+    attributes:
+      label: Accessibility Need
+      description: What specific accessibility challenge would this feature address?
+      placeholder: "This feature would help people who..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: Which category best describes your feature request?
+      options:
+        - Mechanism Improvements (clasps, closures, fastening)
+        - Design Adaptations (visual, tactile considerations)
+        - Technology Integration (smart features, assistive tech)
+        - Tools & Accessories (helper tools, adaptive accessories)
+        - Material Innovations (new materials for adaptive jewelry)
+        - User Experience (usability, accessibility improvements)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How important is this feature to you or your community?
+      options:
+        - Low - Nice to have
+        - Medium - Would significantly improve experience
+        - High - Essential for accessibility
+        - Critical - Currently prevents use of jewelry
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case Example
+      description: Provide a specific example of how this feature would be used
+      placeholder: "For example, someone with limited hand mobility could..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: current-workaround
+    attributes:
+      label: Current Workaround
+      description: How do you or others currently handle this situation? What are the limitations?
+      placeholder: "Currently, people have to... but this is difficult because..."
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other information, mockups, references, or examples that might help
+      placeholder: "Additional details, links to similar solutions, etc."
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Community Guidelines
+      description: By submitting this feature request, you agree to follow our community guidelines
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: I have read the Contributing Guidelines
+          required: true
+        - label: This feature request is related to adaptive/accessible jewelry
+          required: true

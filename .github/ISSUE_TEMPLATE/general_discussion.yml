@@ -1,0 +1,65 @@
+name: 💬 General Discussion
+description: Start a general discussion about adaptive jewelry features
+title: "[DISCUSSION] "
+labels: ["discussion"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start a conversation about adaptive jewelry features, share experiences, or discuss ideas with the community.
+
+  - type: textarea
+    id: discussion-topic
+    attributes:
+      label: Discussion Topic
+      description: What would you like to discuss?
+      placeholder: "I'd like to discuss..."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Discussion Category
+      description: Which area does this discussion relate to?
+      options:
+        - Mechanism Improvements (clasps, closures, fastening)
+        - Design Adaptations (visual, tactile considerations)
+        - Technology Integration (smart features, assistive tech)
+        - Tools & Accessories (helper tools, adaptive accessories)
+        - Material Innovations (new materials for adaptive jewelry)
+        - User Experience (usability, accessibility improvements)
+        - Community & Feedback
+        - General Questions
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context & Background
+      description: Provide background information or context for the discussion
+      placeholder: "Some background on this topic..."
+
+  - type: textarea
+    id: questions
+    attributes:
+      label: Questions for the Community
+      description: What specific questions do you have or what would you like community input on?
+      placeholder: "I'm curious about... What are your thoughts on... Has anyone experienced..."
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Community Guidelines
+      description: By starting this discussion, you agree to follow our community guidelines
+      options:
+        - label: I have searched existing discussions to avoid duplicates
+          required: true
+        - label: I have read the Contributing Guidelines
+          required: true
+        - label: This discussion is related to adaptive/accessible jewelry
+          required: true
