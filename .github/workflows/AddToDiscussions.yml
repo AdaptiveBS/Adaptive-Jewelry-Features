@@ -197,7 +197,7 @@ jobs:
           echo "Found $(echo "$TO_PROCESS" | jq 'length') item(s) in status '${{ env.STATUS_PICKUP_VALUE }}'."
 
       - name: Create discussions and advance status
-        if: ${{ fromJson(steps.fetch.outputs.items) != [] }}
+        if: ${{ fromJSON(steps.fetch.outputs.items)[0] != null }}
         run: |
           set -e
           ITEMS='${{ steps.fetch.outputs.items }}'
